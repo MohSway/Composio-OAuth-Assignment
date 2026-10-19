@@ -2,6 +2,10 @@ import { GoogleGenAI } from "@google/genai";
 import { setCachedGuide, getCachedGuide, slugify } from "@/lib/guides";
 import type { Guide } from "@/lib/types";
 
+// Tavily search + extract, then Gemini generation can take longer than the
+// platform's default serverless timeout (commonly ~10s).
+export const maxDuration = 60;
+
 const SCHEMA_INSTRUCTIONS = `You are writing a guide on how a developer registers and gets approved to use an OAuth app with a given provider/platform, for a product called AuthPilot.
 
 You will be given real content extracted from that provider's current official developer documentation below. Base every concrete detail — scope names, URLs, review requirements, wait times — on that extracted content, not on general knowledge alone. If the extracted content doesn't cover something, say so plainly rather than inventing specifics.
