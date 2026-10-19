@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import FrictionBadge from "./FrictionBadge";
 import CopyButton from "./CopyButton";
@@ -56,7 +56,25 @@ function agentPromptText(guide: Guide): string {
 
 export default function GuideDetail({ guide }: { guide: Guide }) {
   const [promptOpen, setPromptOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
   const evidence = EVIDENCE_CONFIG[guide.evidence];
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length > 0) {
+          setActiveSection(visible[0].target.id);
+        }
+      },
+      { rootMargin: "-96px 0px -70% 0px", threshold: 0 }
+    );
+    for (const s of SECTIONS) {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div style={{ minHeight: "100vh", width: "100%", display: "flex", flexDirection: "column" }}>
@@ -76,7 +94,21 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <Link href="/" style={{ fontSize: 13, color: "var(--text-mute)", display: "flex", alignItems: "center", gap: 6 }}>
+          <Link
+            href="/"
+            className="icon-btn"
+            style={{
+              fontSize: 13,
+              color: "var(--text-mute)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px 6px 8px",
+              marginLeft: -8,
+              borderRadius: 7,
+              border: "1px solid transparent",
+            }}
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <line x1="19" y1="12" x2="5" y2="12" />
               <polyline points="12 19 5 12 12 5" />
@@ -129,6 +161,7 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
           <button
             type="button"
             onClick={() => downloadMarkdown(guide)}
+            className="btn"
             style={{
               fontSize: 13,
               fontWeight: 500,
@@ -153,6 +186,7 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
           <button
             type="button"
             onClick={() => setPromptOpen((v) => !v)}
+            className="btn-primary"
             style={{
               fontSize: 13,
               fontWeight: 600,
@@ -192,6 +226,7 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
                   type="button"
                   onClick={() => setPromptOpen(false)}
                   aria-label="Close agent prompt panel"
+                  className="icon-btn"
                   style={{
                     width: 29,
                     height: 29,
@@ -382,7 +417,7 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
           </ul>
         </div>
 
-        <div style={{ flex: "1 1 220px", minWidth: 200, order: 2 }}>
+        <div style={{ flex: "1 1 220px", minWidth: 200, order: 2, position: "sticky", top: 96, alignSelf: "flex-start" }}>
           <div
             style={{
               fontSize: 11,
@@ -396,21 +431,25 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
             On this page
           </div>
           <nav aria-label="Guide sections" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {SECTIONS.map((s, i) => (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                style={{
-                  fontSize: 13.5,
-                  color: i === 0 ? "var(--text-dim)" : "var(--text-mute)",
-                  padding: "7px 10px",
-                  borderRadius: 7,
-                  borderLeft: i === 0 ? "2px solid var(--accent)" : "none",
-                }}
-              >
-                {s.label}
-              </a>
-            ))}
+            {SECTIONS.map((s) => {
+              const active = s.id === activeSection;
+              return (
+                <a
+                  key={s.id}
+                  href={`#${s.id}`}
+                  className="toc-link"
+                  style={{
+                    fontSize: 13.5,
+                    color: active ? "var(--text-dim)" : "var(--text-mute)",
+                    padding: "7px 10px",
+                    borderRadius: 7,
+                    borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
+                  }}
+                >
+                  {s.label}
+                </a>
+              );
+            })}
           </nav>
         </div>
       </div>

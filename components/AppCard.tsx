@@ -12,6 +12,7 @@ function initials(app: string): string {
 export default function AppCard({ guide }: { guide: Guide }) {
   return (
     <div
+      className="card"
       style={{
         background: "var(--card)",
         border: "1px solid var(--border)",

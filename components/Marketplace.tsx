@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppCard from "./AppCard";
+import GeneratingModal from "./GeneratingModal";
 import { SESSION_KEY_PREFIX } from "./GeneratedGuideView";
 import { slugify } from "@/lib/slug";
 import type { FrictionLevel, Guide } from "@/lib/types";
@@ -14,11 +15,14 @@ const FILTERS: { label: string; value: FrictionLevel | "all" }[] = [
   { label: "Approval can take weeks", value: "long-wait" },
 ];
 
+type Phase = "search" | "read" | "write";
+
 export default function Marketplace({ guides }: { guides: Guide[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FrictionLevel | "all">("all");
   const [investigating, setInvestigating] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("search");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 
@@ -36,6 +40,7 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
 
   async function startGeneration(appQuery: string) {
     setError("");
+    setPhase("search");
     setInvestigating(appQuery);
     setStatus(`Investigating ${appQuery}...`);
     try {
@@ -57,10 +62,12 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
         for (const line of lines) {
           if (!line.trim()) continue;
           const evt = JSON.parse(line);
-          if (evt.type === "status") setStatus(evt.message);
+          if (evt.type === "status") {
+            setStatus(evt.message);
+            if (evt.phase) setPhase(evt.phase);
+          }
           if (evt.type === "error") {
             setError(evt.message);
-            setInvestigating(null);
           }
           if (evt.type === "done") {
             const guideSlug = slugify(evt.data.app);
@@ -76,7 +83,6 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
-      setInvestigating(null);
     }
   }
 
@@ -164,6 +170,7 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search an app, or paste a website…"
             aria-label="Search for an app or paste a website"
+            className="search-input"
             style={{
               width: "100%",
               background: "var(--card)",
@@ -195,6 +202,7 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
                   key={s}
                   type="button"
                   onClick={() => router.push(`/guide/${slugify(s)}`)}
+                  className="suggestion-row"
                   style={{
                     display: "block",
                     width: "100%",
@@ -221,6 +229,7 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
             key={f.value}
             type="button"
             onClick={() => setFilter(f.value)}
+            className="chip"
             style={{
               fontSize: 13,
               fontFamily: "IBM Plex Mono, monospace",
@@ -254,60 +263,17 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
       </div>
 
       {investigating && (
-        <div style={{ maxWidth: 1180, margin: "0 auto 72px", width: "100%", padding: "0 48px" }}>
-          <div
-            style={{
-              border: "1px dashed #2b3142",
-              borderRadius: 12,
-              padding: "18px 22px",
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              background: "var(--bg-raised)",
-            }}
-          >
-            <span
-              style={{
-                width: 9,
-                height: 9,
-                borderRadius: "50%",
-                background: "var(--accent)",
-                flexShrink: 0,
-                animation: "pulse 1.2s ease-in-out infinite",
-              }}
-            />
-            <div>
-              <div style={{ fontFamily: "IBM Plex Mono, monospace", fontSize: 13, color: "var(--text)" }}>
-                Investigating {investigating}…
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 3 }}>{status}</div>
-            </div>
-          </div>
-        </div>
+        <GeneratingModal
+          appName={investigating}
+          phase={phase}
+          message={status}
+          error={error || null}
+          onClose={() => {
+            setInvestigating(null);
+            setError("");
+          }}
+        />
       )}
-
-      {error && (
-        <div style={{ maxWidth: 1180, margin: "0 auto 72px", width: "100%", padding: "0 48px" }}>
-          <div
-            style={{
-              border: "1px solid var(--red)",
-              borderRadius: 12,
-              padding: "18px 22px",
-              color: "var(--red)",
-              fontSize: 13,
-            }}
-          >
-            {error}
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.35; }
-        }
-      `}</style>
     </div>
   );
 }

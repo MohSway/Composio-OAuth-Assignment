@@ -21,6 +21,10 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   padding: 0;
@@ -32,15 +36,97 @@ body {
   color: var(--text);
   font-family: "IBM Plex Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(91, 141, 239, 0.35);
+  color: var(--text);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
 }
 
 a {
   color: var(--accent);
   text-decoration: none;
+  transition: color 0.15s ease;
 }
 
 a:hover {
   color: var(--accent-hover);
+}
+
+/* Shared interactive affordances — kept minimal and layered on top of the
+   per-component inline styles, since hover states can't be expressed inline. */
+button {
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.card {
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.chip:hover {
+  border-color: var(--text-faint) !important;
+  color: var(--text-dim) !important;
+}
+
+.suggestion-row:hover {
+  background: var(--bg-raised) !important;
+  color: var(--text) !important;
+}
+
+.btn:hover {
+  border-color: var(--text-faint) !important;
+  color: var(--text) !important;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+}
+
+.icon-btn:hover {
+  border-color: var(--text-faint) !important;
+  color: var(--text-dim) !important;
+  background: var(--bg-raised) !important;
+}
+
+.search-input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(91, 141, 239, 0.15);
+}
+
+.toc-link {
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.toc-link:hover {
+  color: var(--text-dim) !important;
+  background: var(--bg-raised);
 }
 
 h2 {

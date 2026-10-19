@@ -72,7 +72,7 @@ type Enqueue = (obj: unknown) => void;
 async function runGeneration(appName: string, ai: GoogleGenAI, tavilyKey: string, enqueue: Enqueue): Promise<void> {
   let results: TavilySearchResult[];
   try {
-    enqueue({ type: "status", message: `Searching for ${appName}'s developer docs...` });
+    enqueue({ type: "status", phase: "search", message: `Searching for ${appName}'s developer docs...` });
     results = await tavilySearch(tavilyKey, `${appName} OAuth API developer documentation app registration`);
   } catch (err) {
     enqueue({ type: "error", message: err instanceof Error ? err.message : "Search failed." });
@@ -84,7 +84,7 @@ async function runGeneration(appName: string, ai: GoogleGenAI, tavilyKey: string
     return;
   }
 
-  enqueue({ type: "status", message: `Reading ${new URL(results[0].url).hostname}...` });
+  enqueue({ type: "status", phase: "read", message: `Reading ${new URL(results[0].url).hostname}...` });
 
   // Using search results' own content snippets (skips a separate /extract
   // round trip) to stay well under the platform's 60s function cap.
@@ -93,14 +93,14 @@ async function runGeneration(appName: string, ai: GoogleGenAI, tavilyKey: string
     .join("\n\n")
     .slice(0, 10000);
 
-  enqueue({ type: "status", message: "Writing the guide from what was found..." });
+  enqueue({ type: "status", phase: "write", message: "Writing the guide from what was found..." });
 
   // Some proxies in front of the function cut a connection that sends no
   // bytes for a few seconds, even within the overall function time budget.
   // A periodic heartbeat keeps bytes flowing while we wait on Gemini,
   // including the gap before its first streamed chunk.
   const heartbeat = setInterval(() => {
-    enqueue({ type: "status", message: "Still writing the guide..." });
+    enqueue({ type: "status", phase: "write", message: "Still writing the guide..." });
   }, 4000);
 
   let fullText = "";
