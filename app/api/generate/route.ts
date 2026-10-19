@@ -60,20 +60,9 @@ async function tavilySearch(apiKey: string, query: string): Promise<TavilySearch
   const res = await fetch(`${TAVILY_API}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ query, search_depth: "advanced", max_results: 5 }),
+    body: JSON.stringify({ query, search_depth: "advanced", max_results: 4 }),
   });
   if (!res.ok) throw new Error(`Tavily search failed: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  return data.results ?? [];
-}
-
-async function tavilyExtract(apiKey: string, urls: string[]): Promise<{ url: string; raw_content: string }[]> {
-  const res = await fetch(`${TAVILY_API}/extract`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ urls }),
-  });
-  if (!res.ok) throw new Error(`Tavily extract failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return data.results ?? [];
 }
@@ -110,37 +99,37 @@ export async function POST(req: Request) {
     async start(controller) {
       const enqueue = (obj: unknown) => controller.enqueue(new TextEncoder().encode(sseLine(obj)));
 
-      let docs: { url: string; raw_content: string }[] = [];
+      let results: TavilySearchResult[] = [];
       try {
         enqueue({ type: "status", message: `Searching for ${appName}'s developer docs...` });
-        const results = await tavilySearch(tavilyKey, `${appName} OAuth API developer documentation app registration`);
-        const topUrls = results.slice(0, 3).map((r) => r.url);
+        results = await tavilySearch(tavilyKey, `${appName} OAuth API developer documentation app registration`);
 
-        if (topUrls.length === 0) {
+        if (results.length === 0) {
           enqueue({ type: "error", message: `Couldn't find developer docs for "${appName}". Try a more specific name.` });
           controller.close();
           return;
         }
 
-        enqueue({ type: "status", message: `Reading ${new URL(topUrls[0]).hostname}...` });
-        docs = await tavilyExtract(tavilyKey, topUrls);
+        enqueue({ type: "status", message: `Reading ${new URL(results[0].url).hostname}...` });
       } catch (err) {
         enqueue({ type: "error", message: err instanceof Error ? err.message : "Search failed." });
         controller.close();
         return;
       }
 
-      const context = docs
-        .map((d) => `--- Source: ${d.url} ---\n${(d.raw_content ?? "").slice(0, 8000)}`)
+      // Using search results' own content snippets (skips a separate /extract
+      // round trip) to stay well under the platform's 60s function cap.
+      const context = results
+        .map((r) => `--- Source: ${r.url} ---\n${(r.content ?? "").slice(0, 3000)}`)
         .join("\n\n")
-        .slice(0, 20000);
+        .slice(0, 10000);
 
       enqueue({ type: "status", message: "Writing the guide from what was found..." });
 
       let fullText = "";
       try {
         const response = await ai.models.generateContentStream({
-          model: "gemini-flash-latest",
+          model: "gemini-flash-lite-latest",
           contents: `${SCHEMA_INSTRUCTIONS}\n\nProvider / app to research: ${appName}\n\nExtracted developer documentation:\n${context}`,
         });
 
