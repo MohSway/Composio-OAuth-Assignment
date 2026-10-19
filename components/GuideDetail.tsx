@@ -386,24 +386,31 @@ export default function GuideDetail({ guide }: { guide: Guide }) {
               padding: "18px 20px",
               marginBottom: 40,
               display: "flex",
-              alignItems: "flex-start",
+              flexDirection: "column",
               gap: 12,
             }}
           >
-            <span
-              style={{
-                fontSize: 11,
-                fontFamily: "IBM Plex Mono, monospace",
-                padding: "4px 9px",
-                borderRadius: 5,
-                background: guide.approval.required ? "rgba(251,191,36,0.12)" : "rgba(52,211,153,0.12)",
-                color: guide.approval.required ? "var(--amber)" : "var(--green)",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {guide.approval.required ? `Review required · ${guide.approval.expectedWait}` : "No review required"}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontFamily: "IBM Plex Mono, monospace",
+                  padding: "4px 9px",
+                  borderRadius: 5,
+                  background: guide.approval.required ? "rgba(251,191,36,0.12)" : "rgba(52,211,153,0.12)",
+                  color: guide.approval.required ? "var(--amber)" : "var(--green)",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+              >
+                {guide.approval.required ? "Review required" : "No review required"}
+              </span>
+              {guide.approval.required && (
+                <span style={{ fontSize: 12.5, color: "var(--text-faint)", fontFamily: "IBM Plex Mono, monospace" }}>
+                  Expected wait: {guide.approval.expectedWait}
+                </span>
+              )}
+            </div>
             <p style={{ margin: 0, color: "var(--text-mute)", fontSize: 13.5, lineHeight: 1.6 }}>{guide.approval.notes}</p>
           </div>
 
