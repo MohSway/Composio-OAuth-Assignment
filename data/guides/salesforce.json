@@ -1,0 +1,62 @@
+{
+  "app": "Salesforce",
+  "frictionSummary": "Connected App setup is self-serve inside an org; AppExchange distribution adds an optional security review.",
+  "frictionLevel": "review",
+  "prerequisites": [
+    "A Salesforce org (a free Developer Edition org works) with System Administrator access",
+    "Salesforce is steering new integrations toward External Client Apps (ECA) rather than the older Connected App type — check which your target org expects",
+    "A callback URL you control, for the Authorization Code (with PKCE) flow"
+  ],
+  "steps": [
+    {
+      "title": "Create a Connected App (or External Client App)",
+      "body": "Setup → App Manager → New Connected App (or New External Client App on orgs where ECA is available). Enable OAuth Settings."
+    },
+    {
+      "title": "Set the callback URL and OAuth scopes",
+      "body": "Enter your callback URL and select the OAuth scopes your integration needs. For ECAs, PKCE and refresh-token security controls live under the app's Security settings — leaving \"Require Secret for Refresh Token Flow\" misconfigured is a common cause of token refresh failures."
+    },
+    {
+      "title": "Retrieve the Consumer Key and Secret",
+      "body": "After saving, Salesforce generates a Consumer Key (client ID) and Consumer Secret. These can take a few minutes to activate on a new org.",
+      "codeSnippet": "curl -X POST https://login.salesforce.com/services/oauth2/token \\\n  -d grant_type=authorization_code \\\n  -d client_id=YOUR_CONSUMER_KEY \\\n  -d client_secret=YOUR_CONSUMER_SECRET \\\n  -d redirect_uri=YOUR_CALLBACK_URL \\\n  -d code=THE_AUTH_CODE"
+    },
+    {
+      "title": "If distributing via AppExchange, submit for Security Review",
+      "body": "Listing a packaged app on AppExchange requires passing Salesforce's ISV Security Review — a formal, multi-week process distinct from basic Connected App setup, which itself needs no review."
+    }
+  ],
+  "scopes": [
+    { "scope": "api", "grants": "Access and manage the user's Salesforce data via the API" },
+    { "scope": "refresh_token", "grants": "Obtain a refresh token for offline/long-lived access" },
+    { "scope": "openid", "grants": "Confirm the user's identity" }
+  ],
+  "approval": {
+    "required": true,
+    "expectedWait": "None for internal Connected App use within your own org; multi-week ISV Security Review only for AppExchange listing",
+    "notes": "Doc-sourced. Creating and using a Connected App inside your own org requires no review. Only packaging and distributing via the AppExchange marketplace triggers Salesforce's formal ISV Security Review."
+  },
+  "gotchas": [
+    "Salesforce is migrating new integrations toward External Client Apps (ECA); older Connected Apps still work but new security controls (PKCE, refresh-token rotation, IP restrictions) are documented primarily for ECAs",
+    "A newly created Consumer Key/Secret can take several minutes to propagate before the first OAuth request succeeds",
+    "For ECAs, an unchecked \"Require Secret for Refresh Token Flow\" setting is a common, non-obvious cause of refresh failures",
+    "AppExchange's ISV Security Review is a distinct, multi-week process — don't assume it's required just to use OAuth inside your own org"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install jsforce (Node) or simple-salesforce (Python) for the OAuth + API flow",
+      "Create /api/auth/salesforce/callback — exchanges the code at https://login.salesforce.com/services/oauth2/token",
+      "Add placeholder env vars: SALESFORCE_CLIENT_ID, SALESFORCE_CLIENT_SECRET, SALESFORCE_REDIRECT_URI",
+      "Wire up a \"Connect Salesforce\" button redirecting to https://login.salesforce.com/services/oauth2/authorize with response_type=code",
+      "Use PKCE if the developer's app is set up as an External Client App"
+    ],
+    "dont": [
+      "Create the Connected App / External Client App in the org, or submit for ISV Security Review — those are the developer's call",
+      "Enter the real Consumer Secret anywhere — leave it as an env placeholder",
+      "Assume login.salesforce.com is always correct — sandboxes use test.salesforce.com"
+    ],
+    "envVars": ["SALESFORCE_CLIENT_ID", "SALESFORCE_CLIENT_SECRET", "SALESFORCE_REDIRECT_URI"],
+    "redirectUri": "http://localhost:3000/api/auth/salesforce/callback"
+  },
+  "evidence": "doc-sourced"
+}

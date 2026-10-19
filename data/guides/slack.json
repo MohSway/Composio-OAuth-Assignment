@@ -1,0 +1,63 @@
+{
+  "app": "Slack",
+  "frictionSummary": "Self-serve app creation; public distribution via the App Directory needs review.",
+  "frictionLevel": "review",
+  "prerequisites": [
+    "A Slack workspace you can create apps in (api.slack.com/apps)",
+    "A clear list of the minimum scopes your app actually needs — Slack's reviewers check for least-privilege requests",
+    "If targeting the App Directory: a demo video of the full install/OAuth/uninstall flow, submitted 2-3 weeks ahead of launch"
+  ],
+  "steps": [
+    {
+      "title": "Create the app",
+      "body": "api.slack.com/apps → Create New App → From scratch. Pick the workspace to develop against."
+    },
+    {
+      "title": "Add OAuth scopes",
+      "body": "Under OAuth & Permissions, add Bot Token Scopes (and User Token Scopes if needed). Slack separates scopes granted at install from ones requested later, but review criteria apply to both."
+    },
+    {
+      "title": "Set the redirect URL and install to your workspace",
+      "body": "Add your redirect URL under OAuth & Permissions, then install the app to your own workspace to test immediately — no review needed for internal use.",
+      "codeSnippet": "curl -X POST https://slack.com/api/oauth.v2.access \\\n  -d client_id=YOUR_CLIENT_ID \\\n  -d client_secret=YOUR_CLIENT_SECRET \\\n  -d code=THE_AUTH_CODE \\\n  -d redirect_uri=YOUR_REDIRECT_URI"
+    },
+    {
+      "title": "Submit to the App Directory only if you need public distribution",
+      "body": "Listing in the App Directory requires a formal review: justify every requested scope, provide a demo video of install → OAuth → functionality → uninstall, and submit weeks ahead of your target launch date. You can distribute an app outside the Directory with no review at all."
+    }
+  ],
+  "scopes": [
+    { "scope": "channels:read", "grants": "View basic information about public channels" },
+    { "scope": "chat:write", "grants": "Send messages as the app" },
+    { "scope": "users:read", "grants": "View people in the workspace" }
+  ],
+  "approval": {
+    "required": true,
+    "expectedWait": "None for internal/direct install; review required only for App Directory listing",
+    "notes": "Doc-sourced from Slack's App Directory Partner Submission Guide and App Review Guide. Review centers on scope justification and a working demo video; apps not seeking Directory listing can be installed and used with no review step."
+  },
+  "gotchas": [
+    "Scopes requested beyond the minimum trigger extra scrutiny — justify every scope in the submission, not just list them",
+    "Broad/sensitive scopes (like *:history) require showing your data handling and retention practices",
+    "Once an app is published to the Directory, changing scopes or config means resubmitting for review — the older version stays live until the new one is approved",
+    "App Directory submissions need lead time: 3 weeks for new apps, 2 weeks for updates to already-listed apps",
+    "You don't need the App Directory at all if you're distributing the app yourself (e.g. an internal tool or a direct-install link)"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install @slack/oauth and @slack/web-api",
+      "Create /api/auth/slack/callback — exchanges the code at https://slack.com/api/oauth.v2.access",
+      "Add placeholder env vars: SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_SIGNING_SECRET, SLACK_REDIRECT_URI",
+      "Wire up a \"Add to Slack\" button redirecting to https://slack.com/oauth/v2/authorize with only the scopes actually used",
+      "Keep the scope list minimal and documented — it makes a future App Directory submission much faster"
+    ],
+    "dont": [
+      "Request broad scopes like channels:history speculatively — each one needs a justification if you ever submit for Directory review",
+      "Submit to the App Directory without the developer's go-ahead — it starts a real review clock and needs a demo video",
+      "Enter the real client secret or signing secret anywhere — leave them as env placeholders"
+    ],
+    "envVars": ["SLACK_CLIENT_ID", "SLACK_CLIENT_SECRET", "SLACK_SIGNING_SECRET", "SLACK_REDIRECT_URI"],
+    "redirectUri": "http://localhost:3000/api/auth/slack/callback"
+  },
+  "evidence": "doc-sourced"
+}

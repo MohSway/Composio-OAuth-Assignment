@@ -1,0 +1,62 @@
+{
+  "app": "Shopify",
+  "frictionSummary": "Custom apps are instant and store-specific; public apps go through App Store review.",
+  "frictionLevel": "review",
+  "prerequisites": [
+    "A Shopify Partner account (free) and access to the Shopify Dev Dashboard",
+    "Since Jan 2026, new custom apps must be created via the Dev Dashboard or Partner Dashboard, not the store admin — and now go through an OAuth flow like public apps, rather than a copyable admin token",
+    "For a public app: a design and billing flow (via the Billing API) ready for Shopify's review"
+  ],
+  "steps": [
+    {
+      "title": "Decide: custom app or public app",
+      "body": "Custom apps target one store (or a small, known set) and skip the App Store entirely. Public apps use OAuth 2.0 and can be installed on any store, but must pass Shopify's App Store review before public listing."
+    },
+    {
+      "title": "Create the app in the Dev Dashboard",
+      "body": "As of January 2026, Shopify no longer allows creating custom apps from the store admin UI — both custom and public apps are created via the Shopify Dev Dashboard (or Partner Dashboard)."
+    },
+    {
+      "title": "Request scopes and complete the OAuth flow",
+      "body": "Redirect the merchant to the shop's authorize URL, then exchange the returned code for an access token.",
+      "codeSnippet": "https://{shop}.myshopify.com/admin/oauth/authorize?client_id=YOUR_API_KEY&scope=read_products,write_orders&redirect_uri=YOUR_REDIRECT_URI\n\ncurl -X POST https://{shop}.myshopify.com/admin/oauth/access_token \\\n  -d client_id=YOUR_API_KEY \\\n  -d client_secret=YOUR_API_SECRET \\\n  -d code=THE_AUTH_CODE"
+    },
+    {
+      "title": "If going public, submit for App Store review",
+      "body": "Reviewers test the full install/authorization flow end-to-end and expect the Billing API wired up correctly and a UI that holds up under Shopify's design requirements."
+    }
+  ],
+  "scopes": [
+    { "scope": "read_products", "grants": "Read the store's product catalog" },
+    { "scope": "write_orders", "grants": "Create and modify orders" },
+    { "scope": "read_customers", "grants": "Read customer records" }
+  ],
+  "approval": {
+    "required": true,
+    "expectedWait": "None for custom apps (single store); review required only for public App Store listing",
+    "notes": "Doc-sourced from Shopify's Dev Docs and App Store requirements. A custom app installs directly with no review; a public app must pass App Store review, which tests the full OAuth and billing flow."
+  },
+  "gotchas": [
+    "As of Jan 1, 2026, custom apps can no longer be created from the store admin — use the Dev Dashboard or Partner Dashboard instead, and existing custom apps keep working as-is",
+    "New custom apps now go through an OAuth flow to get an access token, where previously you could copy a long-lived token directly from the admin UI — this changes integration code that assumed a static token",
+    "Installing one \"custom\" app across many unrelated stores outside the App Store may run into Shopify's Terms of Service — custom apps are meant for a single merchant or a small known set",
+    "Public apps need the Billing API wired up correctly, not just OAuth, before they'll pass review"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install @shopify/shopify-api for the OAuth + Admin API flow",
+      "Create /api/auth/shopify/callback — exchanges the code at https://{shop}.myshopify.com/admin/oauth/access_token",
+      "Add placeholder env vars: SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SHOPIFY_REDIRECT_URI, SHOPIFY_SCOPES",
+      "Wire up install redirect to https://{shop}.myshopify.com/admin/oauth/authorize with the minimum scopes needed",
+      "Verify the HMAC signature on the callback request before exchanging the code, per Shopify's security requirements"
+    ],
+    "dont": [
+      "Create the app in the Dev Dashboard or submit for App Store review — that's the developer's call",
+      "Enter the real API secret anywhere — leave it as an env placeholder",
+      "Assume a long-lived token can be copied from the admin UI for new custom apps — that path is gone as of Jan 2026"
+    ],
+    "envVars": ["SHOPIFY_API_KEY", "SHOPIFY_API_SECRET", "SHOPIFY_REDIRECT_URI", "SHOPIFY_SCOPES"],
+    "redirectUri": "http://localhost:3000/api/auth/shopify/callback"
+  },
+  "evidence": "doc-sourced"
+}

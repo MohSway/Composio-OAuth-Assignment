@@ -1,0 +1,72 @@
+{
+  "app": "LinkedIn",
+  "frictionSummary": "Needs a real Company Page, and every product beyond Sign-In/Share needs its own review.",
+  "frictionLevel": "long-wait",
+  "prerequisites": [
+    "A real LinkedIn Company Page you administer — personal profiles aren't accepted, and linking a page to an app can't be undone",
+    "A square logo image (at least one dimension ≥100px) — required at app creation, unlike the privacy policy URL which is optional",
+    "A business email address you can verify separately from your LinkedIn login, if you'll request any product beyond the defaults"
+  ],
+  "steps": [
+    {
+      "title": "Create the app under a Company Page",
+      "body": "developer.linkedin.com/apps → Create app. The \"LinkedIn Page\" field requires an actual Company Page, not your personal profile, and the UI warns this association can't be undone once saved."
+    },
+    {
+      "title": "Upload a logo and submit",
+      "body": "App logo is a required field at creation (square, ≥100px on a side) — plan to have one ready, unlike most providers where branding assets come later."
+    },
+    {
+      "title": "Check which products you already have by default",
+      "body": "\"Sign In with LinkedIn using OpenID Connect\" and \"Share on LinkedIn\" are typically available immediately with no review — confirmed hands-on on a real app, both showed as already-active \"Added products.\""
+    },
+    {
+      "title": "Request any additional product individually",
+      "body": "Each additional product (Advertising API, Lead Sync API, Marketing Developer Platform, etc.) has its own standalone \"Request access\" button under the Products tab — there's no single application that unlocks everything at once."
+    },
+    {
+      "title": "Verify a business email before the review even starts",
+      "body": "Requesting a gated product first requires verifying a business email address (separate from your LinkedIn login) via a one-time code — an easy-to-miss gate confirmed hands-on before the actual review queue."
+    },
+    {
+      "title": "Get your scopes from the Products you hold, not a scopes picker",
+      "body": "Scopes aren't chosen directly — they're granted by which products are active. Sign In with OpenID Connect grants openid/profile/email; Share on LinkedIn grants w_member_social. Adding a new product is how you get a new scope."
+    }
+  ],
+  "scopes": [
+    { "scope": "openid", "grants": "Confirms the member's identity (via Sign In with LinkedIn)" },
+    { "scope": "profile", "grants": "Member's name and photo" },
+    { "scope": "email", "grants": "Member's primary email address" },
+    { "scope": "w_member_social", "grants": "Create, modify, and delete posts/comments/reactions on the member's behalf (via Share on LinkedIn)" }
+  ],
+  "approval": {
+    "required": true,
+    "expectedWait": "None for Sign-In/Share (default products); days to weeks per additional product requested",
+    "notes": "Confirmed hands-on on a real LinkedIn developer app: Sign In with OpenID Connect and Share on LinkedIn need no review. Every other product (Advertising API, Lead Sync API, Matched Audiences API, etc.) is gated behind its own \"Request access\" flow, starting with business-email verification."
+  },
+  "gotchas": [
+    "Apps must be tied to a real LinkedIn Company Page — personal profiles aren't accepted, and the page link can't be changed later",
+    "A logo image is required at app creation, not optional like the privacy policy URL",
+    "Requesting any gated product first requires verifying a separate business email via a one-time code, before the actual review begins",
+    "Scopes come from Products, not a direct scopes picker — you can't request w_member_social without the Share on LinkedIn product being active",
+    "Access tokens are long-lived: 2 months (5,184,000 seconds) by default — confirmed on a live app's Auth tab, notably longer than GitHub's 8h or Google's short-lived tokens, which changes how much refresh-token handling a minimal integration actually needs",
+    "\"Apply to the Developer Program\" friction is really about additional products — the default Sign-In + Share combo has no such gate"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install no special SDK — plain fetch/axios against LinkedIn's REST endpoints works fine for Sign-In and Share",
+      "Create /api/auth/linkedin/callback — exchanges the code at https://www.linkedin.com/oauth/v2/accessToken",
+      "Add placeholder env vars: LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, LINKEDIN_REDIRECT_URI",
+      "Wire up a \"Connect LinkedIn\" button redirecting to https://www.linkedin.com/oauth/v2/authorization with scope=openid%20profile%20email",
+      "If posting on the user's behalf is needed, also request w_member_social — but only after the developer confirms the Share on LinkedIn product is active on their app"
+    ],
+    "dont": [
+      "Create the LinkedIn app or pick a Company Page — that's the developer's call, and it's irreversible once saved",
+      "Request a scope whose product hasn't been added yet (e.g. w_member_social without Share on LinkedIn) — the authorization will fail",
+      "Apply for additional products (Advertising API, Lead Sync, etc.) without the developer's go-ahead — each starts a real review queue entry"
+    ],
+    "envVars": ["LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET", "LINKEDIN_REDIRECT_URI"],
+    "redirectUri": "http://localhost:3000/api/auth/linkedin/callback"
+  },
+  "evidence": "tested"
+}

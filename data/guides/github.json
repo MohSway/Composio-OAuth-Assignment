@@ -1,0 +1,67 @@
+{
+  "app": "GitHub",
+  "frictionSummary": "Self-serve, instant, no review — but tokens expire after 8h by default now.",
+  "frictionLevel": "instant",
+  "prerequisites": [
+    "A GitHub account (personal or organization-owned)",
+    "Admin access to the org, if the app will belong to one",
+    "A homepage URL and at least one redirect URI, even a placeholder for local dev"
+  ],
+  "steps": [
+    {
+      "title": "Open Developer settings",
+      "body": "GitHub Settings → Developer settings → OAuth Apps → New OAuth App (github.com/settings/applications/new)."
+    },
+    {
+      "title": "Fill in app details and redirect URIs",
+      "body": "Application name, homepage URL, and a redirect URI. GitHub now supports up to 10 redirect URIs per app (added/removed individually), each with an optional wildcard-matching toggle — it's no longer a single callback field."
+    },
+    {
+      "title": "Decide on token expiration before you register",
+      "body": "\"Expire user access tokens\" is checked by default on new apps: access tokens last 8 hours and come with a refresh token. If your integration only does the one-time code-for-token exchange, it will silently stop working after 8 hours unless you handle refresh tokens or opt out under Optional features."
+    },
+    {
+      "title": "Register and generate a client secret",
+      "body": "GitHub shows the client secret exactly once. Exchange the authorization code for a token like this:",
+      "codeSnippet": "curl -X POST https://github.com/login/oauth/access_token \\\n  -H \"Accept: application/json\" \\\n  -d client_id=YOUR_CLIENT_ID \\\n  -d client_secret=YOUR_CLIENT_SECRET \\\n  -d code=THE_AUTH_CODE"
+    },
+    {
+      "title": "Store credentials and go live",
+      "body": "Save the client ID and secret as environment variables. No submission or review step — the app works immediately, though new/small apps show trust warnings to users on the authorize screen."
+    }
+  ],
+  "scopes": [
+    { "scope": "read:user", "grants": "Read the user's profile information" },
+    { "scope": "repo", "grants": "Full access to public and private repositories" },
+    { "scope": "user:email", "grants": "Read the user's email addresses" }
+  ],
+  "approval": {
+    "required": false,
+    "expectedWait": "None — usable immediately after registration",
+    "notes": "GitHub does not gate OAuth Apps behind manual review. Only certain GitHub Apps Marketplace listings require that. Verified hands-on: registered a real OAuth app and reached the authorize screen with no review step anywhere in the flow."
+  },
+  "gotchas": [
+    "Redirect URIs are now a list (up to 10), not a single field — older tutorials assume one callback URL",
+    "\"Expire user access tokens\" defaults to ON for new apps: 8-hour access tokens + refresh token, not the old non-expiring token",
+    "The client secret is shown once; losing it means generating a new one",
+    "New/small apps show trust warnings on the authorize screen (\"Not owned or operated by GitHub\", \"Created less than a day ago\", \"Fewer than 10 GitHub users\") — expect early users to see this",
+    "Organization-owned apps need an org admin to approve third-party access if the org restricts it"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install @octokit/oauth-app (or use plain fetch) for the token exchange",
+      "Create /api/auth/github/callback — exchanges the auth code for a token at https://github.com/login/oauth/access_token",
+      "Add placeholder env vars: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_REDIRECT_URI",
+      "Wire up a \"Connect GitHub\" button that redirects to https://github.com/login/oauth/authorize?scope=read:user,user:email",
+      "Handle token refresh: if token expiration is left on, store the refresh_token and re-exchange it before the 8h access token expires"
+    ],
+    "dont": [
+      "Register the OAuth app at github.com/settings/developers — that's the developer's call",
+      "Enter the real client secret anywhere — leave it as an env placeholder",
+      "Assume the access token never expires — check whether the app owner left token expiration on"
+    ],
+    "envVars": ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_REDIRECT_URI"],
+    "redirectUri": "http://localhost:3000/api/auth/github/callback"
+  },
+  "evidence": "tested"
+}

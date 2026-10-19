@@ -1,0 +1,64 @@
+{
+  "app": "Twitter / X",
+  "frictionSummary": "Developer portal access is now pay-per-use by default — no free tier for new developers.",
+  "frictionLevel": "long-wait",
+  "prerequisites": [
+    "An X account and a project created at console.x.com (the current developer console — some older guides still point to developer.x.com)",
+    "A payment method: since Feb 2026, new developers default to a pay-per-use model with no free tier",
+    "A clear estimate of call volume — pay-per-use is capped at 2M post reads/month even after buying credits"
+  ],
+  "steps": [
+    {
+      "title": "Create a project and app in the developer console",
+      "body": "console.x.com → create a project, then an app inside it. Pick the app type: Web App or Automated App/Bot (confidential clients using a client secret) vs Native/Single-page app (public clients using PKCE only, no secret)."
+    },
+    {
+      "title": "Set up billing",
+      "body": "New developer accounts are pay-per-use by default: buy credits in the console (roughly $0.005 per post read, $0.01 per post created), with a hard cap of 2M post reads/month. Fixed Basic ($200/mo) and Pro ($5,000/mo) tiers still exist but are only available to developers already subscribed to them — new signups don't get the option."
+    },
+    {
+      "title": "Configure OAuth 2.0 and generate credentials",
+      "body": "OAuth 2.0 is the recommended flow for new projects and is required for X API v2 user-context endpoints. Credentials are shown once in the console — save them immediately.",
+      "codeSnippet": "curl -X POST https://api.twitter.com/2/oauth2/token \\\n  -d grant_type=authorization_code \\\n  -d client_id=YOUR_CLIENT_ID \\\n  -d redirect_uri=YOUR_REDIRECT_URI \\\n  -d code=THE_AUTH_CODE \\\n  -d code_verifier=YOUR_PKCE_VERIFIER"
+    },
+    {
+      "title": "Match the callback URL exactly",
+      "body": "A mismatched redirect URI, including a missing trailing path, is a common cause of failed connections — register it exactly as your app will send it."
+    }
+  ],
+  "scopes": [
+    { "scope": "tweet.read", "grants": "Read posts" },
+    { "scope": "tweet.write", "grants": "Create posts on the user's behalf" },
+    { "scope": "users.read", "grants": "Read profile information" },
+    { "scope": "offline.access", "grants": "Obtain a refresh token for long-lived access" }
+  ],
+  "approval": {
+    "required": true,
+    "expectedWait": "No manual review to get started, but cost is the real gate — pay-per-use is the only on-ramp for new developers as of Feb 2026",
+    "notes": "Doc-sourced. There's no formal app-review queue like LinkedIn's, but new developers can no longer self-serve into a free tier — a payment method and credit purchase are required before the API is usable at all."
+  },
+  "gotchas": [
+    "No free tier for new developers since Feb 2026 — pay-per-use (credits) is the default, with Basic/Pro fixed tiers closed to new signups",
+    "Pay-per-use is capped at 2M post reads/month even with unlimited credit spend",
+    "App type matters for the OAuth flow: Web App / Automated App are confidential clients (client secret); Native / single-page apps are public clients (PKCE only, no secret)",
+    "Exact redirect URI matching is strict — a missing trailing slash or path segment breaks the callback",
+    "Some third-party tutorials still reference developer.x.com and a free tier — the current console is console.x.com and the free tier is gone for new accounts"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install twitter-api-v2 (Node) for OAuth 2.0 + API calls",
+      "Create /api/auth/twitter/callback — exchanges the code with PKCE at https://api.twitter.com/2/oauth2/token",
+      "Add placeholder env vars: TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET, TWITTER_REDIRECT_URI",
+      "Wire up a \"Connect X\" button redirecting to https://twitter.com/i/oauth2/authorize with scope=tweet.read%20tweet.write%20users.read%20offline.access and a PKCE code_challenge",
+      "Store the refresh token (offline.access) since access tokens are short-lived"
+    ],
+    "dont": [
+      "Set up billing or buy API credits — that's a real cost decision for the developer to make",
+      "Enter the real client secret anywhere — leave it as an env placeholder",
+      "Assume a free tier is available — budget for pay-per-use or a fixed tier before building against this API"
+    ],
+    "envVars": ["TWITTER_CLIENT_ID", "TWITTER_CLIENT_SECRET", "TWITTER_REDIRECT_URI"],
+    "redirectUri": "http://localhost:3000/api/auth/twitter/callback"
+  },
+  "evidence": "doc-sourced"
+}

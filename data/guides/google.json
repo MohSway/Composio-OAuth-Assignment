@@ -1,0 +1,73 @@
+{
+  "app": "Google",
+  "frictionSummary": "Self-serve OAuth client, but sensitive scopes cap you at 100 users until verified.",
+  "frictionLevel": "review",
+  "prerequisites": [
+    "A Google account and a GCP project (free, no billing required for OAuth alone)",
+    "A privacy policy URL and, for production, domain verification — required before you can publish out of Testing",
+    "Decide which Google APIs you need (e.g. Calendar, Drive) before configuring scopes"
+  ],
+  "steps": [
+    {
+      "title": "Configure the Google Auth Platform (formerly \"OAuth consent screen\")",
+      "body": "Go to console.cloud.google.com/auth/overview for your project and click Get started. This is now a 4-step wizard — App Information, Audience, Contact Information, Finish — not the single form older docs describe."
+    },
+    {
+      "title": "Choose your audience",
+      "body": "Internal (Google Workspace org only, no verification needed) or External (any Google account). Most integrations need External, which starts the app in Testing mode."
+    },
+    {
+      "title": "Enable the specific API before you can request its scope",
+      "body": "Scopes are scoped to enabled APIs: a scope like Calendar or Drive access won't appear in the scope picker until you enable that API in the API Library first. This trips people up because \"add the scope\" assumes a step most guides don't mention."
+    },
+    {
+      "title": "Create the OAuth client",
+      "body": "APIs & Services → Credentials → Create OAuth client → Web application. Add your redirect URI. Note the new \"Use this client for an AI-powered agent\" checkbox at creation — relevant if you're building an agent integration. The client secret is shown exactly once.",
+      "codeSnippet": "curl -X POST https://oauth2.googleapis.com/token \\\n  -d client_id=YOUR_CLIENT_ID \\\n  -d client_secret=YOUR_CLIENT_SECRET \\\n  -d code=THE_AUTH_CODE \\\n  -d grant_type=authorization_code \\\n  -d redirect_uri=YOUR_REDIRECT_URI"
+    },
+    {
+      "title": "Add test users while in Testing",
+      "body": "External apps in Testing mode are restricted to explicitly-added test users — not even your own account can authorize until it's added under Audience → Test users."
+    },
+    {
+      "title": "Publish and, if using sensitive scopes, submit for verification",
+      "body": "Publishing requires finishing the Branding page first. Sensitive scopes (Calendar, Drive, etc.) need Google's verification review before going past 100 users; non-sensitive scopes (basic profile/email) don't need review to go to production."
+    }
+  ],
+  "scopes": [
+    { "scope": "openid", "grants": "Confirms the user's identity" },
+    { "scope": "https://www.googleapis.com/auth/userinfo.email", "grants": "Read the user's email address" },
+    { "scope": "https://www.googleapis.com/auth/calendar.readonly", "grants": "Read the user's Google Calendar events (sensitive scope)" },
+    { "scope": "https://www.googleapis.com/auth/drive.file", "grants": "Access only files the user opens or creates with your app (sensitive scope)" }
+  ],
+  "approval": {
+    "required": true,
+    "expectedWait": "Days to weeks for sensitive-scope verification; none for basic profile/email scopes",
+    "notes": "Verified hands-on that Testing-mode apps are capped at 100 users total (lifetime, not concurrent) and restricted to explicit test users until verified. The verification queue timeline itself is doc-sourced — a throwaway test project wasn't submitted for a real review."
+  },
+  "gotchas": [
+    "The \"OAuth consent screen\" is now \"Google Auth Platform\" — a 4-step wizard, not one page. Docs that say \"go to the consent screen\" describe a UI that no longer exists in that shape",
+    "Scopes only appear in the picker for already-enabled APIs — enable Calendar/Drive API first, or the scope you want won't show up",
+    "External apps are capped at 100 users during Testing, counted over the app's entire lifetime, not resettable by removing test users",
+    "New: a \"Use this client for an AI-powered agent\" checkbox at OAuth client creation — new and specifically relevant to agent-building developers",
+    "Publishing requires completing the Branding page first, a separate prerequisite gate before verification review even starts",
+    "Client secret shown once at creation, same one-time-reveal pattern as GitHub"
+  ],
+  "agentPrompt": {
+    "do": [
+      "Install google-auth-library (Node) for the OAuth2Client flow",
+      "Create /api/auth/google/callback — exchanges the code at https://oauth2.googleapis.com/token",
+      "Add placeholder env vars: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI",
+      "Wire up a \"Connect Google\" button redirecting to https://accounts.google.com/o/oauth2/v2/auth with access_type=offline for a refresh token",
+      "Request only non-sensitive scopes (openid, email, profile) if verification isn't done yet — sensitive scopes will fail for anyone not added as a test user"
+    ],
+    "dont": [
+      "Configure the Google Auth Platform or enable APIs in Cloud Console — that's the developer's call",
+      "Enter the real client secret anywhere — leave it as an env placeholder",
+      "Request Calendar/Drive scopes assuming they'll work for arbitrary users — they won't until verification is done or the user is added as a test user"
+    ],
+    "envVars": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"],
+    "redirectUri": "http://localhost:3000/api/auth/google/callback"
+  },
+  "evidence": "tested"
+}
