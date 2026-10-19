@@ -37,9 +37,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# live-generated guides cached at runtime, not part of the source library
-/data/generated-cache
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

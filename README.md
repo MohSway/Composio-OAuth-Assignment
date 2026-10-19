@@ -23,11 +23,11 @@ Open `http://localhost:3000`. The 7 library guides load instantly from static JS
 
 **Single schema, no drift.** Every guide — library or live-generated — is the exact same JSON shape (`lib/types.ts`). The marketplace card, the guide detail page, the agent-prompt panel, and the downloadable `.md` are all rendered from that one object, so there's one source of truth per app.
 
-**Why Tavily + Gemini instead of the Claude API for live generation.** The brief originally specified the Claude API's web-search tool. In practice: the Anthropic API needs separate billing from a Claude.ai Pro subscription, and wasn't available for this build. Google's Gemini API offers a genuinely free key with no card required, but its native Google Search grounding tool turned out to require a billing-enabled project even within its "free" quota (confirmed directly: plain generation works on the free key, adding the grounding tool alone returns `429 RESOURCE_EXHAUSTED` every time). The live-generation route (`app/api/generate/route.ts`) instead calls **Tavily** (`/search` then `/extract`, free tier, no card) to pull real current doc content, then feeds that extracted text into a plain Gemini `generateContentStream` call with no model-native search tool on either side. This keeps the "investigates real docs in real time" requirement intact without needing a paid account anywhere in the pipeline.
+**Why Tavily + Gemini instead of the Claude API for live generation.** The brief originally specified the Claude API's web-search tool. In practice: the Anthropic API needs separate billing from a Claude.ai Pro subscription, and wasn't available for this build. Google's Gemini API offers a genuinely free key with no card required, but its native Google Search grounding tool turned out to require a billing-enabled project even within its "free" quota (confirmed directly: plain generation works on the free key, adding the grounding tool alone returns `429 RESOURCE_EXHAUSTED` every time). The live-generation route (`app/api/generate/route.ts`) instead calls **Tavily** `/search` (free tier, no card) to pull real current doc content and URLs, then feeds those content snippets into a plain `gemini-flash-lite-latest` `generateContentStream` call with no model-native search tool on either side. This keeps the "investigates real docs in real time" requirement intact without needing a paid account anywhere in the pipeline, and the lite model keeps the whole search+generate round trip to a few seconds.
 
-**Streaming, not a blocking spinner.** The marketplace page streams newline-delimited status events (`searching → reading → writing the guide`) from the API route as they happen, shown in a dashed "Investigating…" box matching the design reference. Once the guide is complete, the browser navigates to its detail page. Generated guides are cached to `data/generated-cache/*.json` (gitignored) so a repeat query doesn't re-research from scratch in the same deployment.
+**Streaming, not a blocking spinner.** The marketplace page streams newline-delimited status events (`searching → reading → writing the guide`) from the API route as they happen, shown in a dashed "Investigating…" box matching the design reference. Once the guide is complete, the browser navigates to its detail page.
 
-**No database.** The 7 library guides are static JSON committed to the repo (`data/guides/*.json`). Live-generated guides are cached to the filesystem. This is the right amount of persistence for the brief — anything more would be over-engineering for a stateless demo.
+**No database, and no shared server-side cache.** The 7 library guides are static JSON committed to the repo (`data/guides/*.json`). A live-generated guide is handed to the browser in the same streamed response that produced it and kept in that tab's `sessionStorage` — deliberately *not* relied on being re-fetched from the server, because Vercel's serverless functions don't share a filesystem across instances (an earlier version tried writing generated guides to disk and 404'd when the next request landed on a different instance). Opening a generated guide's URL in a fresh tab/session re-prompts to search again rather than erroring, since there's nowhere stateless to persist it short of adding a database — which would be over-engineering for this brief.
 
 ## Evidence tags
 
@@ -41,6 +41,7 @@ Every guide carries one of three tags, shown in the guide header:
 
 - **Live generation depends on two free external APIs.** If Tavily can't find a provider's docs (very new or very obscure apps), or finds low-quality pages, the generated guide's `agentPrompt` specifics (real URLs, real env var names) could be wrong. There's no fact-checking pass after generation.
 - **The Gemini free tier has real rate limits.** Heavy concurrent use of live generation will eventually hit a 429; the UI surfaces the error cleanly but doesn't retry or queue.
+- **A generated guide only persists in the tab that generated it** (`sessionStorage`, not a database) — see "No database, and no shared server-side cache" above. Opening its URL fresh shows a re-search prompt instead of the guide.
 - **The three hands-on test apps/projects were left in place** (GitHub OAuth App "AuthPilot Verification App", Google Cloud project "authpilot-verification", and read-only inspection of the developer's existing LinkedIn app — no new LinkedIn app was created because its logo-upload step needs a native file picker this environment's browser automation can't drive). None hold real user data or secrets beyond the throwaway test credentials.
 - **No automated tests.** Given the project's scope and timeline, verification was manual: built, ran locally, clicked through the golden path and edge cases (search → view guide, filter chips, unknown app → live generation, copy/download) in a real browser. See [`tasks/verification-log.md`](tasks/verification-log.md) for the hands-on audit trail.
 - **Mobile layout** was checked at a few widths (the guide page's side TOC correctly stacks below the content per the spec), but not exhaustively across devices.
@@ -49,14 +50,16 @@ Every guide carries one of three tags, shown in the guide header:
 
 ```
 app/
-  page.tsx                 marketplace (server component, loads library guides)
-  guide/[slug]/page.tsx    guide detail (library or cached live-generated guide)
-  api/generate/route.ts    live generation: Tavily search+extract -> Gemini -> cache
-components/                Marketplace, AppCard, GuideDetail, CopyButton, FrictionBadge
-data/guides/*.json         the 7 pre-built guides (single source of truth per app)
-data/generated-cache/      live-generated guides, cached per session (gitignored)
-lib/types.ts               the one Guide schema everything renders from
-lib/guides.ts               filesystem loader + cache read/write
-lib/markdown.ts             renders a Guide as the downloadable .md
-tasks/verification-log.md  hands-on audit trail from the GitHub/Google/LinkedIn walkthroughs
+  page.tsx                   marketplace (server component, loads library guides)
+  guide/[slug]/page.tsx      library guide (server), or a client fallback for a
+                              live-generated one (reads sessionStorage)
+  api/generate/route.ts      live generation: Tavily search -> Gemini -> streamed
+components/                  Marketplace, AppCard, GuideDetail, GeneratedGuideView,
+                              CopyButton, FrictionBadge
+data/guides/*.json           the 7 pre-built guides (single source of truth per app)
+lib/types.ts                 the one Guide schema everything renders from
+lib/guides.ts                static-library loader (+ a same-instance temp-dir
+                              cache, best-effort only — see note above)
+lib/markdown.ts               renders a Guide as the downloadable .md
+tasks/verification-log.md    hands-on audit trail from the GitHub/Google/LinkedIn walkthroughs
 ```
