@@ -126,6 +126,14 @@ export async function POST(req: Request) {
 
       enqueue({ type: "status", message: "Writing the guide from what was found..." });
 
+      // Some proxies in front of the function will cut an idle connection
+      // that goes quiet for a few seconds, even within the overall function
+      // time budget. A periodic heartbeat keeps bytes flowing while we wait
+      // on Gemini, including the gap before its first streamed chunk.
+      const heartbeat = setInterval(() => {
+        enqueue({ type: "status", message: "Still writing the guide..." });
+      }, 4000);
+
       let fullText = "";
       try {
         const response = await ai.models.generateContentStream({
@@ -137,7 +145,15 @@ export async function POST(req: Request) {
           if (chunk.text) fullText += chunk.text;
         }
       } catch (err) {
+        clearInterval(heartbeat);
         enqueue({ type: "error", message: err instanceof Error ? err.message : "Generation failed." });
+        controller.close();
+        return;
+      }
+      clearInterval(heartbeat);
+
+      if (!fullText) {
+        enqueue({ type: "error", message: "Gemini returned no content." });
         controller.close();
         return;
       }
