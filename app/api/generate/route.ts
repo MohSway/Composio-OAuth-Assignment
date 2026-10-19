@@ -2,8 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 import { setCachedGuide, getCachedGuide, slugify } from "@/lib/guides";
 import type { Guide } from "@/lib/types";
 
-// Tavily search + extract, then Gemini generation can take longer than the
-// platform's default serverless timeout (commonly ~10s).
+// Tavily search + Gemini generation can take longer than some platforms'
+// default serverless timeout (commonly ~10s).
 export const maxDuration = 60;
 
 const SCHEMA_INSTRUCTIONS = `You are writing a guide on how a developer registers and gets approved to use an OAuth app with a given provider/platform, for a product called AuthPilot.
@@ -67,6 +67,87 @@ async function tavilySearch(apiKey: string, query: string): Promise<TavilySearch
   return data.results ?? [];
 }
 
+type Enqueue = (obj: unknown) => void;
+
+async function runGeneration(appName: string, ai: GoogleGenAI, tavilyKey: string, enqueue: Enqueue): Promise<void> {
+  let results: TavilySearchResult[];
+  try {
+    enqueue({ type: "status", message: `Searching for ${appName}'s developer docs...` });
+    results = await tavilySearch(tavilyKey, `${appName} OAuth API developer documentation app registration`);
+  } catch (err) {
+    enqueue({ type: "error", message: err instanceof Error ? err.message : "Search failed." });
+    return;
+  }
+
+  if (results.length === 0) {
+    enqueue({ type: "error", message: `Couldn't find developer docs for "${appName}". Try a more specific name.` });
+    return;
+  }
+
+  enqueue({ type: "status", message: `Reading ${new URL(results[0].url).hostname}...` });
+
+  // Using search results' own content snippets (skips a separate /extract
+  // round trip) to stay well under the platform's 60s function cap.
+  const context = results
+    .map((r) => `--- Source: ${r.url} ---\n${(r.content ?? "").slice(0, 3000)}`)
+    .join("\n\n")
+    .slice(0, 10000);
+
+  enqueue({ type: "status", message: "Writing the guide from what was found..." });
+
+  // Some proxies in front of the function cut a connection that sends no
+  // bytes for a few seconds, even within the overall function time budget.
+  // A periodic heartbeat keeps bytes flowing while we wait on Gemini,
+  // including the gap before its first streamed chunk.
+  const heartbeat = setInterval(() => {
+    enqueue({ type: "status", message: "Still writing the guide..." });
+  }, 4000);
+
+  let fullText = "";
+  try {
+    const response = await ai.models.generateContentStream({
+      model: "gemini-flash-lite-latest",
+      contents: `${SCHEMA_INSTRUCTIONS}\n\nProvider / app to research: ${appName}\n\nExtracted developer documentation:\n${context}`,
+    });
+
+    for await (const chunk of response) {
+      if (chunk.text) fullText += chunk.text;
+    }
+  } catch (err) {
+    enqueue({ type: "error", message: err instanceof Error ? err.message : "Generation failed." });
+    return;
+  } finally {
+    clearInterval(heartbeat);
+  }
+
+  if (!fullText) {
+    enqueue({ type: "error", message: "Gemini returned no content." });
+    return;
+  }
+
+  const parsed = extractJson(fullText);
+  if (!parsed) {
+    enqueue({ type: "error", message: "Couldn't parse a guide from the research. Try rephrasing the app name." });
+    return;
+  }
+
+  const guide: Guide = {
+    app: String(parsed.app ?? appName),
+    frictionSummary: String(parsed.frictionSummary ?? ""),
+    frictionLevel: (parsed.frictionLevel as Guide["frictionLevel"]) ?? "review",
+    prerequisites: Array.isArray(parsed.prerequisites) ? (parsed.prerequisites as string[]) : [],
+    steps: Array.isArray(parsed.steps) ? (parsed.steps as Guide["steps"]) : [],
+    scopes: Array.isArray(parsed.scopes) ? (parsed.scopes as Guide["scopes"]) : [],
+    approval: (parsed.approval as Guide["approval"]) ?? { required: true, expectedWait: "Unknown", notes: "" },
+    gotchas: Array.isArray(parsed.gotchas) ? (parsed.gotchas as string[]) : [],
+    agentPrompt: (parsed.agentPrompt as Guide["agentPrompt"]) ?? { do: [], dont: [], envVars: [], redirectUri: "" },
+    evidence: "doc-sourced",
+  };
+
+  setCachedGuide(guide);
+  enqueue({ type: "done", data: guide });
+}
+
 export async function POST(req: Request) {
   const { query } = (await req.json()) as { query: string };
   const appName = query.trim();
@@ -97,90 +178,28 @@ export async function POST(req: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const enqueue = (obj: unknown) => controller.enqueue(new TextEncoder().encode(sseLine(obj)));
-
-      let results: TavilySearchResult[] = [];
-      try {
-        enqueue({ type: "status", message: `Searching for ${appName}'s developer docs...` });
-        results = await tavilySearch(tavilyKey, `${appName} OAuth API developer documentation app registration`);
-
-        if (results.length === 0) {
-          enqueue({ type: "error", message: `Couldn't find developer docs for "${appName}". Try a more specific name.` });
-          controller.close();
-          return;
+      const enqueue: Enqueue = (obj) => {
+        try {
+          controller.enqueue(new TextEncoder().encode(sseLine(obj)));
+        } catch {
+          // Controller already closed (e.g. client disconnected) — nothing to do.
         }
-
-        enqueue({ type: "status", message: `Reading ${new URL(results[0].url).hostname}...` });
-      } catch (err) {
-        enqueue({ type: "error", message: err instanceof Error ? err.message : "Search failed." });
-        controller.close();
-        return;
-      }
-
-      // Using search results' own content snippets (skips a separate /extract
-      // round trip) to stay well under the platform's 60s function cap.
-      const context = results
-        .map((r) => `--- Source: ${r.url} ---\n${(r.content ?? "").slice(0, 3000)}`)
-        .join("\n\n")
-        .slice(0, 10000);
-
-      enqueue({ type: "status", message: "Writing the guide from what was found..." });
-
-      // Some proxies in front of the function will cut an idle connection
-      // that goes quiet for a few seconds, even within the overall function
-      // time budget. A periodic heartbeat keeps bytes flowing while we wait
-      // on Gemini, including the gap before its first streamed chunk.
-      const heartbeat = setInterval(() => {
-        enqueue({ type: "status", message: "Still writing the guide..." });
-      }, 4000);
-
-      let fullText = "";
-      try {
-        const response = await ai.models.generateContentStream({
-          model: "gemini-flash-lite-latest",
-          contents: `${SCHEMA_INSTRUCTIONS}\n\nProvider / app to research: ${appName}\n\nExtracted developer documentation:\n${context}`,
-        });
-
-        for await (const chunk of response) {
-          if (chunk.text) fullText += chunk.text;
-        }
-      } catch (err) {
-        clearInterval(heartbeat);
-        enqueue({ type: "error", message: err instanceof Error ? err.message : "Generation failed." });
-        controller.close();
-        return;
-      }
-      clearInterval(heartbeat);
-
-      if (!fullText) {
-        enqueue({ type: "error", message: "Gemini returned no content." });
-        controller.close();
-        return;
-      }
-
-      const parsed = extractJson(fullText);
-      if (!parsed) {
-        enqueue({ type: "error", message: "Couldn't parse a guide from the research. Try rephrasing the app name." });
-        controller.close();
-        return;
-      }
-
-      const guide: Guide = {
-        app: String(parsed.app ?? appName),
-        frictionSummary: String(parsed.frictionSummary ?? ""),
-        frictionLevel: (parsed.frictionLevel as Guide["frictionLevel"]) ?? "review",
-        prerequisites: Array.isArray(parsed.prerequisites) ? (parsed.prerequisites as string[]) : [],
-        steps: Array.isArray(parsed.steps) ? (parsed.steps as Guide["steps"]) : [],
-        scopes: Array.isArray(parsed.scopes) ? (parsed.scopes as Guide["scopes"]) : [],
-        approval: (parsed.approval as Guide["approval"]) ?? { required: true, expectedWait: "Unknown", notes: "" },
-        gotchas: Array.isArray(parsed.gotchas) ? (parsed.gotchas as string[]) : [],
-        agentPrompt: (parsed.agentPrompt as Guide["agentPrompt"]) ?? { do: [], dont: [], envVars: [], redirectUri: "" },
-        evidence: "doc-sourced",
       };
 
-      setCachedGuide(guide);
-      enqueue({ type: "done", data: guide });
-      controller.close();
+      try {
+        await runGeneration(appName, ai, tavilyKey, enqueue);
+      } catch (err) {
+        // Last-resort net: any uncaught throw here would otherwise close the
+        // stream with no "error" or "done" event, leaving the client stuck.
+        console.error("generate route failed:", err);
+        enqueue({ type: "error", message: err instanceof Error ? err.message : "Unexpected server error." });
+      }
+
+      try {
+        controller.close();
+      } catch {
+        // Already closed — fine.
+      }
     },
   });
 
