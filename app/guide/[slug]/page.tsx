@@ -1,10 +1,10 @@
-import { notFound } from "next/navigation";
 import GuideDetail from "@/components/GuideDetail";
-import { getGuide } from "@/lib/guides";
+import GeneratedGuideView from "@/components/GeneratedGuideView";
+import { getLibraryGuide } from "@/lib/guides";
 
 export default async function GuidePage({ params }: PageProps<"/guide/[slug]">) {
   const { slug } = await params;
-  const guide = getGuide(slug);
-  if (!guide) notFound();
-  return <GuideDetail guide={guide} />;
+  const guide = getLibraryGuide(slug);
+  if (guide) return <GuideDetail guide={guide} />;
+  return <GeneratedGuideView slug={slug} />;
 }

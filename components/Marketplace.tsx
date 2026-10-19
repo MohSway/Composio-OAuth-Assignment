@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppCard from "./AppCard";
+import { SESSION_KEY_PREFIX } from "./GeneratedGuideView";
 import { slugify } from "@/lib/slug";
 import type { FrictionLevel, Guide } from "@/lib/types";
 
@@ -62,7 +63,14 @@ export default function Marketplace({ guides }: { guides: Guide[] }) {
             setInvestigating(null);
           }
           if (evt.type === "done") {
-            router.push(`/guide/${slugify(evt.data.app)}`);
+            const guideSlug = slugify(evt.data.app);
+            try {
+              sessionStorage.setItem(SESSION_KEY_PREFIX + guideSlug, JSON.stringify(evt.data));
+            } catch {
+              // sessionStorage unavailable (private mode, etc) — guide page
+              // will offer to regenerate instead.
+            }
+            router.push(`/guide/${guideSlug}`);
           }
         }
       }
